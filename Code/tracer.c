@@ -5,55 +5,63 @@
 #include <string.h>
 #include <unistd.h>
 #include <fcntl.h>
+#include <sys/wait.h>
 #include <sys/time.h>
-//int mkfifo(const char *pathname, mode_t mode);
 
-
-
-
-// O ficheiro que abre para ler bloqueia até haver outro processo que abra o ficheiro no modo de escrita
 int main (int argc, char* argv[]) {
 
-    int fd = open ("fifo",O_WRONLY);
+    if (argc >= 4 && !strcmp(argv[1], "execute") && !strcmp(argv[2], "-u")) {
+        int fd = open ("fifo", O_WRONLY);
 
+       
+        char* args[argc-2];
+        for (int i = 3; i < argc; i++) {
+            args[i-3] = argv[i];
+        }
+        args[argc-3] = NULL;
 
-    if (!strcmp(argv[1],"execute") && !strcmp (argv[2],"-u")) { // execute -ps
+        struct timeval tv_start, tv_end, tv_beforefunc;
 
+        gettimeofday(&tv_start,NULL);
+        
+        int pid_fork = fork();
+        
+        if (pid_fork == -1) {
+            perror("fork");
+            exit(EXIT_FAILURE);
+        } else if (pid_fork == 0) {
 
-    // informa o servidor do processo que vai executar o programa
-    pid_t pid = getpid();
-    write (fd,&pid,sizeof(pid)); 
+        pid_t pid = getpid();
+        
+        //envia o pid para o servidor
+        write (fd, &pid, sizeof(pid)); 
 
-    //O nome do programa a executar
-    write (fd,argv[1],sizeof(argv[1]));
+        //envia o nome do programa para o servidor
+        write(fd, argv[3], strlen(argv[3]) + 1);
 
+        //envia o timestamp atual para o servidor
+        gettimeofday(&tv_beforefunc,NULL);
+        write (fd,&tv_beforefunc,sizeof(tv_beforefunc));
 
-    struct timeval tv;
-    gettimeofday(&tv, NULL);
+        printf("Process ID: %d\n", pid);
 
-    long long timestamp = (long long)tv.tv_sec * 1000000 + tv.tv_usec;
+        execvp(argv[3], args);
 
-    //O timestamp atual
-    write(fd, &timestamp, sizeof(timestamp));
+        perror("execvp");
+        exit(EXIT_FAILURE);
+        } else {
+            wait (NULL);
+            gettimeofday(&tv_end, NULL);
+            
+            write (fd,&tv_end,sizeof(tv_end));
+            printf("Forked child with PID: %d\n", pid_fork);
 
-    
-    write (STDOUT_FILENO,&pid,sizeof(pid));
+            //timersub(&tv_end, &tv_start, &tv_diff);
+            //printf("Time elapsed: %ld.%06lds\n", tv_diff.tv_sec, tv_diff.tv_usec);
+            long elapsed_milliseconds =  (tv_end.tv_usec - tv_start.tv_usec) ;                      
+            printf("Time elapsed: %ld micro seconds\n", elapsed_milliseconds);
+        }
+    } 
 
-    char* args[argc-3];  
-    
-    for (int i = 0; i < argc - 3; i++) {
-        args[i] = argv[i+3];
-    }
-
-    execvp(argv[1],args);
-
-    }
-    
-    close(fd);
-
-
-    printf("Pipe com nome 'fifo' fechado.\n");
-
-return 0;
-
+    return 0;
 }
