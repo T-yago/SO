@@ -39,11 +39,12 @@ int main (int argc, char* argv[]) {
         //envia o nome do programa para o servidor
         write(fd, argv[3], strlen(argv[3]) + 1);
 
+        printf("Process ID: %d\n", pid);
+
         //envia o timestamp atual para o servidor
         gettimeofday(&tv_beforefunc,NULL);
         write (fd,&tv_beforefunc,sizeof(tv_beforefunc));
 
-        printf("Process ID: %d\n", pid);
 
         execvp(argv[3], args);
 
@@ -53,12 +54,11 @@ int main (int argc, char* argv[]) {
             wait (NULL);
             gettimeofday(&tv_end, NULL);
             
-            write (fd,&tv_end,sizeof(tv_end));
             printf("Forked child with PID: %d\n", pid_fork);
 
             //timersub(&tv_end, &tv_start, &tv_diff);
             //printf("Time elapsed: %ld.%06lds\n", tv_diff.tv_sec, tv_diff.tv_usec);
-            long elapsed_milliseconds =  (tv_end.tv_usec - tv_start.tv_usec) ;                      
+            long elapsed_milliseconds =  (tv_end.tv_usec - tv_start.tv_usec);                      
             printf("Time elapsed: %ld micro seconds\n", elapsed_milliseconds);
         }
     } 

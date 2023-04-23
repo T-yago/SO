@@ -10,23 +10,31 @@
 
 int main () {
 
+
+if (mkfifo("fifo",0666) == -1) {
+        perror ("fifo:");
+        exit (EXIT_FAILURE);
+    }
+
     int fd = open ("fifo", O_RDONLY);
 
     pid_t pid;
     char program[100];
-    struct timeval tv_start, tv_end;
+    struct timeval tv_start, tv_after;
     long elapsed_microseconds;
 
+
+
     while (1) {
-        int nbytes = read(fd, &pid, sizeof(pid));
-        if (nbytes <= 0) {
-            // No more data available, exit the loop
-            break;
-        }
+        printf ("ola\n");
+        read(fd, &pid, sizeof(pid));
         read(fd, program, sizeof(program));
         read(fd, &tv_start, sizeof(tv_start));
-        read(fd, &tv_end, sizeof(tv_end));
-        elapsed_microseconds = tv_end.tv_usec - tv_start.tv_usec;
+        gettimeofday (&tv_after,NULL);
+            int fd_bloqueia = open ("fifo",O_WRONLY);
+
+
+        elapsed_microseconds = tv_after.tv_usec - tv_start.tv_usec;
         printf("Program '%s' with PID %d ran for %ld microseconds\n", program, pid, elapsed_microseconds);
     }
 
