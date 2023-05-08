@@ -1,15 +1,4 @@
-#include <sys/types.h>
-#include <sys/stat.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <unistd.h>
-#include <fcntl.h>
-#include <sys/wait.h>
-#include <sys/time.h>
-
-
-
+#include "execute.h"
 int main () {
 
 
@@ -20,8 +9,6 @@ if (mkfifo("fifo",0666) == -1) {
 
     int fd = open ("fifo", O_RDWR);
 
-    pid_t pid;
-    char program[100];
     long elapsed_microseconds;
 
     struct mensagem msg_antes;
