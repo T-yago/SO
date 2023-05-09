@@ -15,8 +15,6 @@ void execute_program(char* program_name, char** program_args) {
             exit(EXIT_FAILURE);
         }
 
-
-
     int pid_fork = fork();
 
     if (pid_fork == -1) {
@@ -36,11 +34,11 @@ void execute_program(char* program_name, char** program_args) {
         strncpy(msg_antes.name_program, program_name, sizeof(msg_antes.name_program));
 
         //envia o timestamp atual para o servidor
+        msg_antes.type = 1;
         gettimeofday(&msg_antes.tempo, NULL);
 
         write(fd, &msg_antes, sizeof(msg_antes));
- 
-        write(pipe_anonimo[1], &msg_antes, sizeof(msg_antes));
+        write(pipe_anonimo[1], &msg_antes.tempo, sizeof(msg_antes.tempo));
         close(pipe_anonimo[1]);  // close the write end of the pipe
 
         execvp(program_name, program_args);
@@ -55,18 +53,18 @@ void execute_program(char* program_name, char** program_args) {
 
         gettimeofday(&msg_depois.tempo, NULL);
         
-        read(pipe_anonimo[0], &start_anonimo, sizeof(msg_depois.tempo));
+        read(pipe_anonimo[0], &start_anonimo, sizeof(msg_antes.tempo));
         close(pipe_anonimo[0]);  // close the read end of the pipe
         
         pid_t pai = getpid();
         msg_depois.pid = pai;
         strncpy(msg_depois.name_program, program_name, sizeof(msg_depois.name_program));
-        write(fd, &msg_depois, sizeof(msg_antes));
-
+        msg_depois.type = 1;
+        write(fd, &msg_depois, sizeof(msg_depois));
+    
         long elapsed_microseconds = msg_depois.tempo.tv_usec - start_anonimo.tv_usec;
         printf("Program '%s' with PID %d ran for %ld microseconds\n", program_name, msg_depois.pid, elapsed_microseconds);
 
-        printf("Forked child with PID: %d\n", child_pid);
     }
 }
 

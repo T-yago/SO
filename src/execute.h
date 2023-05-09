@@ -15,6 +15,7 @@ struct mensagem {
     pid_t pid;
     char name_program [60];
     struct timeval tempo;
+    int type; //1=exec; 2=status
 };
 
 void execute_program(char* program_name, char** program_args);
