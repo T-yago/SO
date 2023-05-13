@@ -18,6 +18,11 @@ typedef struct mensagem {
     int type; //1=exec; 2=status
 } Mensagem;
 
+typedef struct store {
+    char name_program [60];
+    long tempo;
+} Store;
+
 void execute_program(char* program_name, char** program_args);
 
 #endif

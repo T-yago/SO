@@ -1,26 +1,99 @@
 #include "execute.h"
 
-void get_status_time(char** program_args) {
+void get_status_command (char* program_name, char** program_args)
+{
     // Criar o fifo que vai receber as mensagens do servidor
 
     char str_Pid_Receber[60];
-    sprintf(str_Pid_Receber, "%d", getpid());
+    sprintf(str_Pid_Receber, "%d_Monitor_To_Tracer", getpid());
+
+    if (mkfifo(str_Pid_Receber,0666) == -1) {
+        perror ("Fifo Error");
+        exit (EXIT_FAILURE);
+    }
+
+    // Enviar uma mensagem a sinalizar que é um stats-time (tipo==3)
+
+    int fd_Sinalizar = open("fifo", O_WRONLY);
+
+    Mensagem msg_Sinalizar;
+    strcpy (msg_Sinalizar.name_program, program_name);
+    msg_Sinalizar.type = 4;
+    msg_Sinalizar.pid = getpid();
+    write(fd_Sinalizar, &msg_Sinalizar, sizeof(Mensagem));
+
+    // Abre o fifo que vai receber as mensagens do servidor
+
     int fd_Receber = open(str_Pid_Receber, O_RDONLY);
 
-    // Criar o fifo que vai enviar as mensagens para o servidor
+    // Abre o fifo que vai enviar as mensagens para o servidor
 
     char str_Pid_Enviar[60];
-    sprintf(str_Pid_Enviar, "%d_status_time", getpid());
-    int fd_Enviar = open(str_Pid_Enviar, O_RDONLY);
-
-    // Calcular o tempo em que o status_time foi chamado
-
-    struct timeval tempo;
-    gettimeofday(&tempo, NULL);
+    sprintf(str_Pid_Enviar, "%d_Tracer_To_Monitor", getpid());
+    int fd_Enviar = open(str_Pid_Enviar, O_WRONLY);
 
     // Enviar para o servidor os PIDs dos programas que quer ver as informações
 
-    for (int i = 1;program_args[i]!=NULL;i++) {
+    for (int i = 0;program_args[i]!=NULL;i++) {
+        int pid = atoi(program_args[i]);
+        write (fd_Enviar, &pid, sizeof(int));
+    }
+
+    close(fd_Enviar);
+
+    // Receber as respostas
+
+    int ocorrencias = 0;
+    int occorreu;
+
+    ssize_t bytes;
+    while ((bytes = read(fd_Receber, &occorreu, sizeof(int)))>0) {
+        ocorrencias++;
+    }
+
+    close (fd_Receber);
+
+    // Escrever o output
+
+    char str_Output[200];
+    sprintf(str_Output, "%s was executed %d times\n", program_name, ocorrencias);
+    write(1, &str_Output, strlen(str_Output)+1);
+}
+
+void get_status_time(char** program_args)
+{
+    // Criar o fifo que vai receber as mensagens do servidor
+
+    char str_Pid_Receber[60];
+    sprintf(str_Pid_Receber, "%d_Monitor_To_Tracer", getpid());
+
+    if (mkfifo(str_Pid_Receber,0666) == -1) {
+        perror ("Fifo Error");
+        exit (EXIT_FAILURE);
+    }
+
+    // Enviar uma mensagem a sinalizar que é um stats-time (tipo==3)
+
+    int fd_Sinalizar = open("fifo", O_WRONLY);
+
+    Mensagem msg_Sinalizar;
+    msg_Sinalizar.type = 3;
+    msg_Sinalizar.pid = getpid();
+    write(fd_Sinalizar, &msg_Sinalizar, sizeof(Mensagem));
+
+    // Abre o fifo que vai receber as mensagens do servidor
+
+    int fd_Receber = open(str_Pid_Receber, O_RDONLY);
+
+    // Abre o fifo que vai enviar as mensagens para o servidor
+
+    char str_Pid_Enviar[60];
+    sprintf(str_Pid_Enviar, "%d_Tracer_To_Monitor", getpid());
+    int fd_Enviar = open(str_Pid_Enviar, O_WRONLY);
+
+    // Enviar para o servidor os PIDs dos programas que quer ver as informações
+
+    for (int i = 0;program_args[i]!=NULL;i++) {
         int pid = atoi(program_args[i]);
         write (fd_Enviar, &pid, sizeof(int));
     }
@@ -36,6 +109,8 @@ void get_status_time(char** program_args) {
     while ((bytes = read(fd_Receber, &tempoParcial, sizeof(long)))>0) {
         tempoTotal += tempoParcial;
     }
+
+    close (fd_Receber);
 
     // Escrever o output
 
@@ -88,7 +163,8 @@ void get_status()
     close(fd);
 }
 
-void execute_program(char* program_name, char** program_args) {
+void execute_program(char* program_name, char** program_args)
+{
     int fd = open("fifo", O_WRONLY);
     struct mensagem msg_antes;
     struct mensagem msg_depois;
@@ -143,7 +219,7 @@ void execute_program(char* program_name, char** program_args) {
 
         // Executa o programa pedido pelo cliente
 
-        sleep(8);
+        sleep(5);
 
         execvp(program_name, program_args);
 
@@ -186,14 +262,15 @@ void execute_program(char* program_name, char** program_args) {
 
 
 int main(int argc, char* argv[]) {
-    char* program_args[argc - 2];
-    for (int i = 3; i < argc; i++) {
-        program_args[i - 3] = argv[i];
-    }
-    program_args[argc - 3] = NULL;
 
     if (argc >= 4 && !strcmp(argv[1], "execute") && !strcmp(argv[2], "-u")) {
         char* program_name = argv[3];
+
+        char* program_args[argc - 2];
+        for (int i = 3; i < argc; i++) {
+            program_args[i - 3] = argv[i];
+        }
+        program_args[argc - 3] = NULL;
 
         execute_program(program_name, program_args);
     }
@@ -201,11 +278,27 @@ int main(int argc, char* argv[]) {
     {
         get_status();
     }
-    else if (argc >= 2 && !strcmp(argv[1], "stats-time")) {
+    else if (argc >= 2 && !strcmp(argv[1], "stats-time"))
+    {
+        char* program_args[argc - 1];
+        for (int i = 2; i < argc; i++) {
+            program_args[i - 2] = argv[i];
+        }
+        program_args[argc - 2] = NULL;
+
         get_status_time(program_args);
     }
-    else if (argc >= 2 && !strcmp(argv[1], "stats-command")) {
-        // get_status_command(program_args);
+    else if (argc >= 2 && !strcmp(argv[1], "stats-command"))
+    {
+        char* program_name = argv[2];
+
+        char* program_args[argc - 2];
+        for (int i = 3; i < argc; i++) {
+            program_args[i - 3] = argv[i];
+        }
+        program_args[argc - 3] = NULL;
+
+        get_status_command(program_name ,program_args);
     }
     else if (argc >= 2 && !strcmp(argv[1], "stats-uniq")) {
         // get_status_uniq(program_args);
