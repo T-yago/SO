@@ -13,13 +13,13 @@
 
 typedef struct mensagem {
     pid_t pid;
-    char name_program [60];
+    char name_program [150];
     long tempo;
     int type; //1=exec; 2=status
 } Mensagem;
 
 typedef struct store {
-    char name_program [60];
+    char name_program [150];
     long tempo;
 } Store;
 

@@ -1,5 +1,128 @@
 #include "execute.h"
 
+#define MAX_COMMANDS 20
+#define MAX_ARGS 10
+
+void execute_pipeline(char* pipeline)
+{
+    int fd = open("fifo", O_WRONLY);
+    struct mensagem msg_antes;
+    struct mensagem msg_depois;
+
+    msg_antes.pid = getpid();
+
+    char str_Pid_Message[60];
+    sprintf(str_Pid_Message, "Running PID %d\n", msg_antes.pid);
+    write (1, &str_Pid_Message, strlen(str_Pid_Message)+1);
+
+    // Envia o nome do programa para o servidor
+
+    strcpy(msg_antes.name_program, pipeline);
+
+    // Envia o timestamp atual para o servidor
+
+    msg_antes.type = 1;
+    struct timeval tempo_Aux;
+    gettimeofday(&tempo_Aux, NULL);
+    msg_antes.tempo = tempo_Aux.tv_sec * 1000000L + tempo_Aux.tv_usec;
+
+    write(fd, &msg_antes, sizeof(msg_antes));
+
+    int num_cmds = 0;
+    char* cmds[MAX_COMMANDS][MAX_ARGS];
+
+    char* cmd_token = NULL;
+    char* saveptr = NULL;
+    cmd_token = strtok_r(pipeline, "|", &saveptr);
+    while (cmd_token != NULL && num_cmds < MAX_COMMANDS) {
+        int num_args = 0;
+        char* arg_token = strtok(cmd_token, " ");
+        while (arg_token != NULL && num_args < MAX_ARGS) {
+            cmds[num_cmds][num_args++] = arg_token;
+            arg_token = strtok(NULL, " ");
+        }
+        cmds[num_cmds][num_args] = NULL; // marca o final dos argumentos
+        num_cmds++;
+        cmd_token = strtok_r(NULL, "|", &saveptr);
+    }
+
+    int pipes[num_cmds-1][2]; // cria pipes para cada conexão entre os comandos
+
+    // cria todos os pipes necessários
+    for (int i = 0; i < num_cmds-1; i++) {
+        if (pipe(pipes[i]) == -1) {
+            perror("pipe");
+            exit(EXIT_FAILURE);
+        }
+    }
+
+    // executa cada comando em um processo filho
+    for (int i = 0; i < num_cmds; i++) {
+        int pid = fork();
+        if (pid == -1) {
+            perror("fork");
+            exit(EXIT_FAILURE);
+        } else if (pid == 0) {
+            // processo filho
+
+            // redireciona entrada padrão se não for o primeiro comando
+            if (i > 0) {
+                if (dup2(pipes[i-1][0], STDIN_FILENO) == -1) {
+                    perror("dup2");
+                    exit(EXIT_FAILURE);
+                }
+            }
+
+            // redireciona saída padrão se não for o último comando
+            if (i < num_cmds-1) {
+                if (dup2(pipes[i][1], STDOUT_FILENO) == -1) {
+                    perror("dup2");
+                    exit(EXIT_FAILURE);
+                }
+            }
+
+            // fecha os pipes não usados
+            for (int j = 0; j < num_cmds-1; j++) {
+                close(pipes[j][0]);
+                close(pipes[j][1]);
+            }
+
+            // executa o comando
+            if (execvp(cmds[i][0], cmds[i]) == -1) {
+                perror("execvp");
+                exit(EXIT_FAILURE);
+            }
+        }
+    }
+
+    // fecha todos os pipes no processo pai
+    for (int i = 0; i < num_cmds-1; i++) {
+        close(pipes[i][0]);
+        close(pipes[i][1]);
+    }
+
+    // espera todos os filhos terminarem
+    for (int i = 0; i < num_cmds; i++) {
+        if (wait(NULL) == -1) {
+            perror("wait");
+            exit(EXIT_FAILURE);
+        }
+    }
+
+    msg_depois.pid = getpid();
+    strcpy(msg_depois.name_program, msg_antes.name_program);
+    msg_depois.type = 0;    // 0 para identificar que o programa terminou
+    gettimeofday(&tempo_Aux, NULL);
+    msg_depois.tempo = tempo_Aux.tv_sec * 1000000L + tempo_Aux.tv_usec;
+    write(fd, &msg_depois, sizeof(msg_depois));
+
+    long elapsed_microseconds = msg_depois.tempo - msg_antes.tempo;
+
+    char str_Output[200];
+    sprintf(str_Output ,"Ended in %ld miliseconds\n", elapsed_microseconds / 1000);
+    write (1, &str_Output, strlen(str_Output)+1);
+}
+
 void get_status_uniq (char** program_args)
 {
     // Criar o fifo que vai receber as mensagens do servidor
@@ -42,8 +165,8 @@ void get_status_uniq (char** program_args)
 
     // Imprimir os nomes dos programas sem repetir nomes
 
-    char nome[60];
-    char str_Output[61];
+    char nome[150];
+    char str_Output[151];
 
     ssize_t bytes;
     while ((bytes = read(fd_Receber, &nome, 60 * sizeof(char)))>0) {
@@ -273,8 +396,6 @@ void execute_program(char* program_name, char** program_args)
 
         // Executa o programa pedido pelo cliente
 
-        sleep(5);
-
         execvp(program_name, program_args);
 
         perror("execvp");
@@ -310,7 +431,6 @@ void execute_program(char* program_name, char** program_args)
         char str_Output[200];
         sprintf(str_Output ,"Ended in %ld miliseconds\n", elapsed_microseconds / 1000);
         write (1, &str_Output, strlen(str_Output)+1);
-        
     }
 }
 
@@ -327,6 +447,11 @@ int main(int argc, char* argv[]) {
         program_args[argc - 3] = NULL;
 
         execute_program(program_name, program_args);
+    }
+    else if (argc >= 4 && !strcmp(argv[1], "execute") && !strcmp(argv[2], "-p"))
+    {
+        char* pipeline = argv[3];
+        execute_pipeline(pipeline);
     }
     else if (argc >= 2 && !strcmp(argv[1], "status"))
     {
@@ -364,5 +489,6 @@ int main(int argc, char* argv[]) {
 
         get_status_uniq(program_args);
     }
+
     return 0;
 }
