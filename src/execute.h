@@ -11,12 +11,12 @@
 #include <sys/wait.h>
 #include <sys/time.h>
 
-struct mensagem {
+typedef struct mensagem {
     pid_t pid;
     char name_program [60];
-    struct timeval tempo;
+    long tempo;
     int type; //1=exec; 2=status
-};
+} Mensagem;
 
 void execute_program(char* program_name, char** program_args);
 

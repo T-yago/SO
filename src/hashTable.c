@@ -1,5 +1,6 @@
 #include "execute.h"
 #include "hashTable.h"
+#include <string.h>
 
 
 // Initialize a new HashTable
@@ -18,9 +19,15 @@ int hash(int key) {
 }
 
 // Insert a new key-value pair into the HashTable using open addressing
-void insert(HashTable* table, int key, Mensagem* value) {
+void insert(HashTable* table, int key, Mensagem msg) {
     // Hash the key to get an index
     int index = hash(key);
+
+    Mensagem* value = malloc (sizeof(Mensagem));
+    strncpy(value->name_program, msg.name_program, sizeof(value->name_program));
+    value->pid = msg.pid;
+    value->tempo = msg.tempo;
+    value->type = msg.type;
 
     // Check if the index is already occupied
     while (table->nodes[index] != NULL) {
@@ -69,6 +76,8 @@ void delete(HashTable* table, int key) {
     while (table->nodes[index] != NULL) {
         if (table->nodes[index]->key == key) {
             // Delete the node at the index by setting it to NULL
+            free (table->nodes[index]->value);
+            free(table->nodes[index]);
             table->nodes[index] = NULL;
             table->size--;
             return;
@@ -105,63 +114,4 @@ void freeHashTable(HashTable* table) {
         }
     }
     free(table);
-}
-
-
-
-int main () {
-
-    HashTable* table = newHashTable();
-
-
-
-    Mensagem* m1 = (Mensagem*) malloc(sizeof(Mensagem));
-    m1->pid = 1;
-    m1->type = 1;
-    m1->tempo.tv_usec = 1000000;
-    strcpy(m1->name_program, "Program 1");
-
-    printf("Inserting Mensagem 1 with key %d\n", m1->pid);
-    insert(table, m1->pid, m1);
-
-    Mensagem* m2 = (Mensagem*) malloc(sizeof(Mensagem));
-    m2->pid = 2;
-    m2->type = 2;
-    m2->tempo.tv_usec = 2000000;
-    strcpy(m2->name_program, "Program 2");
-
-    printf("Inserting Mensagem 2 with key %d\n", m2->pid);
-    insert(table, m2->pid, m2);
-
-    // Test the get function to retrieve the objects
-    Mensagem* retrieved_m1 = (Mensagem*) get(table, m1->pid);
-    if (retrieved_m1 == NULL || retrieved_m1 != m1) {
-        printf("Error: failed to retrieve Mensagem 1\n");
-        return 1;
-    }
-    printf("Retrieved Mensagem 1 with key %d\n", retrieved_m1->pid);
-
-    Mensagem* retrieved_m2 = (Mensagem*) get(table, m2->pid);
-    if (retrieved_m2 == NULL || retrieved_m2 != m2) {
-        printf("Error: failed to retrieve Mensagem 2\n");
-        return 1;
-    }
-    printf("Retrieved Mensagem 2 with key %d\n", retrieved_m2->pid);
-
-    // Test the lookup function
-    if (lookup(table, m1->pid) == 0) {
-        printf("Error: failed to find key %d in the hashtable\n", m1->pid);
-        return 1;
-    }
-    printf("Found key %d in the hashtable\n", m1->pid);
-
-    if (lookup(table, m2->pid) == 0) {
-        printf("Error: failed to find key %d in the hashtable\n", m2->pid);
-        return 1;
-    }
-    printf("Found key %d in the hashtable\n", m2->pid);
-
-
-    freeHashTable(table);
-return 0;
 }
